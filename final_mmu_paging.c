@@ -1,6 +1,6 @@
 /**
  * @authors Aaron Tsatsu Tamakloe, John Manful, Bernd Opoku-Boadu
- * @file paging.c
+ * @file final_mmu_paging.c
  * @brief Implements a simple paging system simulation.
  *
  * This program simulates a paging system with virtual memory and physical memory.
@@ -98,14 +98,20 @@ void initializePageTable(HashedPageTable* pageTable) {
 
 void allocatePage(HashedPageTable* pageTable, int virtualPageNumber, int frameNumber) {
     frames[frameNumber].occupied = 1;
+    
+    // Use the hash function to determine the index in the page table for this virtual page number.
     unsigned int index = hashFunction(virtualPageNumber);
+    
+    // Dynamically allocate memory for a new PageTableEntry structure.
     PageTableEntry* newEntry = (PageTableEntry*)malloc(sizeof(PageTableEntry));
     newEntry->virtualPageNumber = virtualPageNumber;
     newEntry->frameNumber = frameNumber;
+    
+    // This handles potential hash collisions by using chaining.
     newEntry->next = pageTable->buckets[index];
     pageTable->buckets[index] = newEntry;
-    // frames[frameNumber].occupied = 1;
 }
+
 
 void deallocateProcessPages(HashedPageTable* pageTable) {
     for (int i = 0; i < TABLE_SIZE; ++i) {
@@ -159,6 +165,8 @@ int findFreeFrame() {
 
 void handlePageFault(HashedPageTable* pageTable, int virtualPageNumber, Process* process) {
     int frameNumber = findFreeFrame();
+
+    // Check if no free frames are available.
     if (frameNumber == -1) {
         printf("No free frames available.\n");
     } else {
@@ -166,6 +174,7 @@ void handlePageFault(HashedPageTable* pageTable, int virtualPageNumber, Process*
         printf("Handled page fault for virtual page %d, allocated frame %d\n", virtualPageNumber, frameNumber);
     }
 }
+
 
 
 void createProcesses(Process processes[], int numProcesses, HashedPageTable pageTables[], int option) {
@@ -200,31 +209,33 @@ void createProcesses(Process processes[], int numProcesses, HashedPageTable page
     }
 }
 
-
 void simulateMemoryAccess(Process* processes, int numProcesses, HashedPageTable* pageTables) {
     for (int i = 0; i < numProcesses; i++) {
         printf("Simulating memory accesses for process %d\n", i);
         for (int j = 0; j < NUM_MEMORY_ACCESSES; j++) { 
+            // Generate a random virtual page and offset within that page.
             int virtualPage = rand() % processes[i].numPages;
             int offset = rand() % PAGE_SIZE;
+            // Calculate the virtual address based on the virtual page and offset.
             int virtualAddress = virtualPage * PAGE_SIZE + offset;
+            // Increment the total number of accesses for the process.
             processes[i].stats.totalAccesses++;
 
             int physicalAddress;
             if (!translateAddress(&pageTables[i], virtualAddress, &physicalAddress, &processes[i])) {
+                // Handle a page fault if translation fails.
                 handlePageFault(&pageTables[i], virtualPage, &processes[i]);
                 if (!translateAddress(&pageTables[i], virtualAddress, &physicalAddress, &processes[i])) {
+                    // If still unable to resolve, inform the user and skip to next access.
                     printf("Process %d: Page fault could not be resolved for virtual address %d\n", i, virtualAddress);
                     continue;
                 }
             }
-
             printf("Process %d: Virtual Address %d -> Physical Address %d\n", i, virtualAddress, physicalAddress);
         }
-            deallocateProcessPages(&pageTables[i]);
-
+        // Deallocate all pages allocated to the process after simulation
+        deallocateProcessPages(&pageTables[i]);
     }
-    
 }
 
 
@@ -283,7 +294,7 @@ void updateTLB(int pageNumber, int frameNumber) {
     tlb[tlbIndex].pageNumber = pageNumber;
     tlb[tlbIndex].frameNumber = frameNumber;
     tlb[tlbIndex].valid = true;
-    tlbIndex = (tlbIndex + 1) % TLB_SIZE; // Simple circular buffer for replacement
+    tlbIndex = (tlbIndex + 1) % TLB_SIZE; // Simple buffer for replacement
 }
 
 
